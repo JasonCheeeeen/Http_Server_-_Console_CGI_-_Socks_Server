@@ -100,6 +100,7 @@ private:
                         string write_command;
                         write_command = cmds[cmd_count++];
                         output_command(write_command);
+                        // first time forget to write command to socks server
                         _socket.write_some(buffer(write_command));
                     }
                     do_read();
