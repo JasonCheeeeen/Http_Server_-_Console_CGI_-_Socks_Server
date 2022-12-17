@@ -93,20 +93,19 @@ private:
         memset(data_, '\0', max_length);
         auto self(shared_from_this());
         _socket.async_read_some(boost::asio::buffer(data_, max_length), [this, self](boost::system::error_code ec, size_t length){
-                if(!ec){
-                    string _data(data_);
-                    output_shell(_data); // output from remote shell
-                    if(find(_data.begin(), _data.end(), '%') != _data.end()){
-                        string write_command;
-                        write_command = cmds[cmd_count++];
-                        output_command(write_command);
-                        // first time forget to write command to socks server
-                        _socket.write_some(buffer(write_command));
-                    }
-                    do_read();
+            if(!ec){
+                string _data(data_);
+                output_shell(_data); // output from remote shell
+                if(find(_data.begin(), _data.end(), '%') != _data.end()){
+                    string write_command;
+                    write_command = cmds[cmd_count++];
+                    output_command(write_command);
+                    // first time forget to write command to socks server
+                    _socket.write_some(buffer(write_command));
                 }
+                do_read();
             }
-        );
+        });
     }
 
     void get_total_cmd(){
