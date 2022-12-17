@@ -20,6 +20,124 @@ using namespace boost::asio::ip;
 // declare global io_context !!
 io_context io_context_;
 
+class ServerBind : public enable_shared_from_this<ServerBind>{
+public:
+    ServerBind(shared_ptr<tcp::socket> socket, unsigned char* data, io_context& _io_context)
+        : console_socket(socket), shell_socket(_io_context), shell_acceptor(_io_context){
+            fill(console_data.begin(), console_data.end(), 0);
+            fill(shell_data.begin(), shell_data.end(), 0);
+        }
+
+    void start(){
+        do_bind();
+    }
+
+private:
+    enum { max_length = 81920 };
+    shared_ptr<tcp::socket> console_socket;
+    tcp::socket shell_socket;
+    tcp::acceptor shell_acceptor;
+    unsigned char from_console_msg[8];
+    unsigned char to_console_msg[8];
+    array<char, max_length> console_data;
+    array<char, max_length> shell_data;
+    string shell_ip;
+    string shell_port;
+    unsigned short bind_port;
+
+    void do_bind(){
+        tcp::endpoint shell_endpoint(tcp::endpoint(tcp::v4(), 0));
+        shell_acceptor.open(shell_endpoint.protocol());
+        shell_acceptor.set_option(ip::tcp::acceptor::reuse_address(true));
+        shell_acceptor.bind(shell_endpoint);
+        shell_acceptor.listen();
+        bind_port = shell_acceptor.local_endpoint().port();
+        do_notify(); // notify console to ready to accept
+    }
+
+    void do_notify(){
+        to_console_msg[0] = 0;
+        to_console_msg[1] = 0x5a;
+        to_console_msg[2] = (unsigned char)(bind_port / 256);
+        to_console_msg[3] = (unsigned char)(bind_port % 256);
+        for(int i=4;i<8;i++){
+            to_console_msg[i] = 0;
+        }
+        // send message back to console;
+        auto self(shared_from_this());
+        console_socket->async_send(buffer(to_console_msg, 8), [this, self](boost::system::error_code ec, size_t length){
+            if(!ec){
+                // async accept shell connect to socks
+                auto self(shared_from_this());
+                shell_acceptor.async_accept(shell_socket, [this, self](boost::system::error_code _ec){
+                    if(!_ec){
+                        console_socket->async_send(buffer(to_console_msg, 8), [this, self](boost::system::error_code ec, size_t length){
+                            if(!ec){
+                                do_read(2);
+                            }
+                        });
+                    }
+                });
+            }
+        });    
+    }
+
+    void do_read(int opt){
+        auto self(shared_from_this());
+        if(opt == 0 || opt == 2){
+            do_read_console();
+        }
+        if(opt == 1 || opt == 2){
+            do_read_shell();
+        }
+    }
+
+    void do_read_console(){
+        auto self(shared_from_this());
+        console_socket->async_read_some(buffer(console_data, max_length), [this, self](boost::system::error_code ec, size_t length){
+            if(!ec){
+                do_write_shell(length);
+            }
+        });
+    }
+
+    void do_write_shell(size_t length){
+        auto self(shared_from_this());
+        shell_socket.async_send(buffer(console_data, length), [this, self, length](boost::system::error_code ec, size_t _length){
+            if(!ec){
+                if(length == _length){
+                    do_read_console();
+                }
+                else{
+                    do_write_shell(_length-length);
+                }
+            }
+        });
+    }
+
+    void do_read_shell(){
+        auto self(shared_from_this());
+        shell_socket.async_read_some(buffer(shell_data, max_length), [this, self](boost::system::error_code ec, size_t length){
+            if(!ec){
+                do_write_console(length);
+            }
+        });
+    }
+
+    void do_write_console(size_t length){
+        auto self(shared_from_this());
+        console_socket->async_send(buffer(shell_data, length), [this, self, length](boost::system::error_code ec, size_t _length){
+            if(length == _length){
+                do_read_shell();
+            }
+            else{
+                do_write_console(_length-length);
+            }
+        });
+    }
+};
+
+
 class ServerConnect : public enable_shared_from_this<ServerConnect>{
 public:
     ServerConnect(shared_ptr<tcp::socket> socket, unsigned char* data, io_context& _io_context)
@@ -190,7 +308,7 @@ private:
                         make_shared<ServerConnect>(socket_ptr, data_, io_context_)->start();
                     }
                     else{
-                        // make_shared<ServerBind>(socket_ptr, data_, io_context_)->start();
+                        make_shared<ServerBind>(socket_ptr, data_, io_context_)->start();
                     }
                 }
                 else{
