@@ -57,7 +57,7 @@ private:
 
     void do_notify(){
         to_console_msg[0] = 0;
-        to_console_msg[1] = 0x5a;
+        to_console_msg[1] = 0x5a; // 90
         to_console_msg[2] = (unsigned char)(bind_port / 256);
         to_console_msg[3] = (unsigned char)(bind_port % 256);
         for(int i=4;i<8;i++){
@@ -175,7 +175,7 @@ private:
 
     void do_resolve(){
         auto self(shared_from_this());
-        tcp::resolver::query query(http_host, shell_port);
+        tcp::resolver::query query(shell_ip, shell_port);
         shell_resolver.async_resolve(query, boost::bind(&ServerConnect::do_connect, self, boost::asio::placeholders::error, boost::asio::placeholders::iterator));
     }
 
@@ -334,24 +334,26 @@ private:
     }
 
     void printInfo(unsigned char _cd, bool _leg){
-        cout<<"<S_IP>: "<<socket_.remote_endpoint().address()<<endl;
-        cout<<"<S_PORT>: "<<socket_.remote_endpoint().port()<<endl;
-        cout<<"<D_IP>: "<<(int)data_[4]<<"."<<(int)data_[5]<<"."<<(int)data_[6]<<"."<<(int)data_[7]<<endl;
-        cout<<"<D_PORT>: "<<((int)data_[2]*(0x100)+(int)data_[3])<<endl;
-        cout<<"<Command>: ";
+        cout<<"\n\033[1;34m========== Connect Message ==========\033[0m"<<"\033[0m"<<endl;
+        cout<<"\033[1;36m"<<"<S_IP>:    "<<socket_.remote_endpoint().address()<<"\033[0m"<<endl;
+        cout<<"\033[1;36m"<<"<S_PORT>:  "<<socket_.remote_endpoint().port()<<"\033[0m"<<endl;
+        cout<<"\033[1;36m"<<"<D_IP>:    "<<(int)data_[4]<<"."<<(int)data_[5]<<"."<<(int)data_[6]<<"."<<(int)data_[7]<<"\033[0m"<<endl;
+        cout<<"\033[1;36m"<<"<D_PORT>:  "<<((int)data_[2]*(0x100)+(int)data_[3])<<endl;
+        cout<<"\033[1;36m"<<"<Command>: ";
         if(_cd == 1){
-            cout<<"CONNECT"<<endl;
+            cout<<"CONNECT"<<"\033[0m"<<endl;
         }
         else{
-            cout<<"BIND"<<endl;
+            cout<<"BIND"<<"\033[0m"<<endl;
         }
-        cout<<"<Reply>: ";
+        cout<<"\033[1;36m"<<"<Reply>:   ";
         if(_leg == true){
-            cout<<"Accept"<<endl;
+            cout<<"Accept"<<"\033[0m"<<endl;
         }
         else{
-            cout<<"Reject"<<endl;
+            cout<<"Reject"<<"\033[0m"<<endl;
         }
+        cout<<"\033[1;34m=====================================\033[0m"<<endl;
     }
 };
 
@@ -367,7 +369,7 @@ private:
                 // child process
                 if(_pid == 0){
                     io_context_.notify_fork(boost::asio::io_service::fork_child);
-                    // close socks server to accept another client
+                    // close socks server to accept another client  
                     acceptor_.close();
                     make_shared<CheckInfo>(move(socket_))->start();
                 }
