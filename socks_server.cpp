@@ -19,6 +19,7 @@ using namespace boost::asio::ip;
 
 // declare global io_context !!
 io_context io_context_;
+unordered_map<string, int> rec;
 
 class ServerBind : public enable_shared_from_this<ServerBind>{
 public:
@@ -298,16 +299,35 @@ private:
                     }
                 }
 
+                if(vn != 4){
+                    legitimate = false;
+                }
+
                 // print info of connect
                 printInfo(cd, legitimate);
 
                 // do function
-                if(legitimate == 1){
+                if(legitimate == true){
+                    // if(rec.find(ipp) == rec.end()){
+                    //     rec[ipp] = 0;
+                    // }
                     shared_ptr<tcp::socket> socket_ptr = make_shared<ip::tcp::socket>(move(socket_));
                     if(cd == 1){
+                        // if(rec[ipp] == 3){
+                        //     (*socket_ptr).close();
+                        //     return;
+                        // }
+                        // rec[ipp] += 1;
+
                         make_shared<ServerConnect>(socket_ptr, data_, io_context_)->start();
                     }
                     else{
+                        // if(rec[ipp] == 3){
+                        //     (*socket_ptr).close();
+                        //     return;
+                        // }
+                        // rec[ipp] += 1;
+
                         make_shared<ServerBind>(socket_ptr, data_, io_context_)->start();
                     }
                 }
@@ -364,6 +384,15 @@ private:
     void do_accept(){
         acceptor_.async_accept(socket_, [this](boost::system::error_code ec){
             if(!ec){
+                string ipp = socket_.remote_endpoint().address().to_string();
+                if(rec.find(ipp) == rec.end()){
+                    rec[ipp] = 0;
+                }
+                if(rec[ipp] == 3){
+                    socket_.close();
+                    do_accept();
+                }
+                rec[ipp] += 1;
                 io_context_.notify_fork(boost::asio::io_service::fork_prepare);
                 pid_t _pid = fork();
                 // child process
